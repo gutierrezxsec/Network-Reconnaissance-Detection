@@ -41,7 +41,7 @@ index=botsv3 sourcetype="stream:tcp" NOT (src_ip=10.0.0.0/8 OR src_ip=192.168.0.
 | sort - count
 ```
 
-![Top Talkers panel](<img width="693" height="417" alt="image" src="https://github.com/user-attachments/assets/aed417c2-b232-49a9-b4d6-6f36a65a4af6"/>)
+![Top Talkers panel]<img width="693" height="417" alt="image" src="https://github.com/user-attachments/assets/aed417c2-b232-49a9-b4d6-6f36a65a4af6"/>
 
 **Panel 2 — Destination Port Distribution**
 Aggregates traffic by `dest_port` to surface which ports see the most activity. Helps spot traffic to unusual or non-standard ports at a glance.
@@ -53,7 +53,7 @@ index=botsv3 sourcetype="stream:tcp"
 | head 15
 ```
 
-![Destination Port Distribution panel](<img width="693" height="302" alt="image" src="https://github.com/user-attachments/assets/b84fcc34-26cc-4018-b294-e8a455dc6503"/>)
+![Destination Port Distribution panel]<img width="693" height="302" alt="image" src="https://github.com/user-attachments/assets/b84fcc34-26cc-4018-b294-e8a455dc6503"/>
 
 **Panel 3 — Scan Detection (core panel)**
 
@@ -66,7 +66,7 @@ index=botsv3 sourcetype=stream:tcp
 | where unique_ports > 15
 ```
 
-![Scan Detection panel](<img width="700" height="227" alt="image" src="https://github.com/user-attachments/assets/8c019c52-d93a-4461-a122-5ec7e8eb88d2"/>)
+![Scan Detection panel]<img width="700" height="227" alt="image" src="https://github.com/user-attachments/assets/8c019c52-d93a-4461-a122-5ec7e8eb88d2"/>
 
 **Panel 4 — DNS Query Volume Over Time**
 Tracks DNS query volume over time as a supporting signal alongside the TCP panels above. DNS is commonly abused both for reconnaissance (enumerating internal hosts) and for data exfiltration (tunneling data out through queries), so keeping an eye on its volume adds visibility beyond a single protocol.
@@ -76,7 +76,7 @@ index=botsv3 sourcetype=stream:dns
 | timechart count
 ```
 
-![DNS Query Volume panel](<img width="692" height="297" alt="image" src="https://github.com/user-attachments/assets/b8128b5c-805d-4c5f-a3cf-4f3ac17d4519"/>)
+![DNS Query Volume panel]<img width="692" height="297" alt="image" src="https://github.com/user-attachments/assets/b8128b5c-805d-4c5f-a3cf-4f3ac17d4519"/>
 
 ---
 
