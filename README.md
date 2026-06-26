@@ -105,9 +105,12 @@ The Panel 3 search was saved as a correlation search with the following configur
 <!--
 ## Findings
 
-- Source IP(s) flagged: `[fill in]`
-- Number of unique ports touched / time window: `[fill in]`
-- Cross-check against BOTSv3's documented scenario: `[does it match a known scan event in the dataset's answer key?]`
+- Source IP(s) flagged: `[fill in]` 
+For top talkers this source ip address 104.128.69.207 has unusual amount of connections via port 22 which crucial because it acts as the primary administrative gateway to your infrastructure
+
+- Number of unique ports touched / time window: The number of unique ports touched is 35 unique ports by the ip address 192.168.8.103 which means that this is a recconnaissance
+
+- Cross-check against BOTSv3's documented scenario: ??????
 - Analyst next step: `[what would you do — escalate, gather more context, check against threat intel, close as benign?]`
 
 *(This is the part of the writeup that shows investigative thinking, not just SPL syntax — worth taking the time to fill in properly rather than leaving generic.)*
