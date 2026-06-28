@@ -103,7 +103,7 @@ The Panel 3 search was saved as a correlation search with the following configur
 
 ---
 <!--
-## Findings
+## FINDINGS
 
 - Source IP(s) flagged: `[fill in]` 
 For top talkers this source ip address 104.128.69.207 has unusual amount of connections via port 22 which crucial because it acts as the primary administrative gateway to your infrastructure
@@ -194,6 +194,39 @@ index=botsv3 src_ip="104.128.69.207" dest_ip="172.31.38.181" dest_port=22
 <img width="1452" height="333" alt="image" src="https://github.com/user-attachments/assets/6b76f628-a31b-4148-9c51-9be62c2f64f3" />
 
 The goal of this process is to determine what other log types were created between these two IP addresses
+
+##C. Success / Impact
+C.6 — Any sign of successful connections (using fields confirmed in B.5)
+
+splindex=botsv3 src_ip="104.128.69.207" dest_ip="172.31.38.181" dest_port=22
+| table _time, src_port, dest_port, duration, bytes_in, bytes_out
+| head 20
+
+<img width="1437" height="547" alt="image" src="https://github.com/user-attachments/assets/a92c3243-36c4-43da-8967-ba06fb259918" />
+
+* **`bytes_in` (The Attacker's Voice):** Every time the attacker tries a password, they are shouting a small piece of data into your network.
+* **`bytes_out` (Your Server's Voice):** Every time your server says "Wrong password, access denied," it sends a small piece of data back.
+
+While the attack failed to get in, the data shows the textbook fingerprint of a malicious hacking script, not a human making a mistake.
+
+No Human Typing Speed (Blank Duration): A real person takes at least a few seconds to type a username and password. The duration column is completely blank because a computer script was slamming the server, sending a guess, and disconnecting in less than a millisecond.
+
+Perfect Computer Uniformity (Identical Bytes): When humans type, data sizes change because passwords have different lengths and people make typos. Here, bytes_in (~2100) and bytes_out (2769) are exactly the same on almost every line. This proves a script was repeatedly throwing a fixed-size password guess and getting the exact same automated "Access Denied" reply.
+
+The Rule of 210: A normal employee might forget their password 3 or 5 times. No one forgets their password 210 times in a row on a critical internal mail server.
+
+
+C.7 — Host-level auth logs (if this host has OS-level visibility)
+index=botsv3 dest_ip="172.31.38.181" (sourcetype="linux_secure" OR sourcetype="linux_audit" OR sourcetype="syslog")
+| table _time, sourcetype, host, user, action
+| sort _time
+
+<img width="1447" height="188" alt="image" src="https://github.com/user-attachments/assets/4f30c88b-0ce5-4097-8802-547f84ec2c4c" />
+
+TO BE CONTINUED!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+
+
 
 
 
