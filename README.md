@@ -108,6 +108,98 @@ The Panel 3 search was saved as a correlation search with the following configur
 - Source IP(s) flagged: `[fill in]` 
 For top talkers this source ip address 104.128.69.207 has unusual amount of connections via port 22 which crucial because it acts as the primary administrative gateway to your infrastructure
 
+##Q1 Triage Runbook
+
+
+##0. Origin — How dest_ip and direction were discovered? 
+0.1 — Find where the flagged IP shows up, and in which field (role)
+i tried to look where does the src_ip is connecting and it is confirmed that its inside internal's ip addresses public ip
+
+index=botsv3 "104.128.69.207" sourcetype=stream:tcp
+| stats count by src_ip, dest_ip
+
+<img width="1447" height="201" alt="image" src="https://github.com/user-attachments/assets/a6d23a71-6aba-418e-a6c2-fdf20ceb9450"/>
+
+
+
+##0.2 — Once confirmed as src_ip, pull everything it targeted (this is the query that produced 172.31.38.181)
+- This query confirmed all the destination route of the malicious ip address including the destination port and number of connections
+
+index=botsv3 src_ip="104.128.69.207"
+| stats count by dest_ip, dest_port
+
+<img width="1448" height="215" alt="image" src="https://github.com/user-attachments/assets/fce18a0b-fa8f-4fd7-b5a0-690ab49d7c0c" />
+
+0.3 — Confirm the discovered dest_ip is actually internal
+172.31.38.181 falls inside 172.16.0.0/12 (RFC 1918 private range), and specifically matches AWS's default VPC CIDR block (172.31.0.0/16) — confirming it's an internal, likely cloud-hosted asset, and confirming direction as external → internal. 
+
+
+##A. Asset Context
+
+A.1 — Is SSH service banner/version visible? (checks if Stream app parsed SSH protocol)
+
+splindex=botsv3 dest_ip="172.31.38.181" dest_port=22 sourcetype=stream:ssh
+| table _time, src_ip, dest_ip, ssh_version, software_version
+
+<img width="1452" height="242" alt="image" src="https://github.com/user-attachments/assets/9d1bee50-496c-483d-9721-0c872520e949" />
+
+The SSH banner query came back completely empty, which means we have a visibility gap and can't see the exact software version; however, our basic network logs are still absolute proof that the outsider tried to force their way into this internal server 210 times
+
+
+A.2 — What else does this host show up as? (identify role/hostname)
+
+splindex=botsv3 "172.31.38.181"
+| stats count by sourcetype
+
+<img width="1452" height="416" alt="image" src="https://github.com/user-attachments/assets/985f4026-7915-4c99-9020-c58f9915dc4e" />
+
+A review of the server’s log types revealed that it heavily generates email traffic (stream:smtp) and network name lookups (stream:dns), proving that this internal IP is a legitimate corporate mail server and a high-value target for the attacker.
+
+
+A.3 — Did 104.128.69.207 touch any other internal hosts?
+index=botsv3 src_ip="104.128.69.207"
+| stats count by dest_ip, dest_port
+
+<img width="1453" height="226" alt="image" src="https://github.com/user-attachments/assets/bfa2237d-de4c-4643-8fda-6515f144cb08" />
+
+These findings support the conclusion that this was likely a targeted attack.
+
+##B. Threat Characterization
+
+
+B.4 — Single port (brute-force) vs. many ports (scan)?
+
+splindex=botsv3 src_ip="104.128.69.207"
+| stats dc(dest_port) as unique_ports, count as total_connections by dest_ip, dest_port
+
+<img width="1453" height="266" alt="image" src="https://github.com/user-attachments/assets/1612a82a-0abe-4dec-9a7f-cf3a4b6034ab" />
+
+The findings show that the attacker consistently attempted to connect to port 22, which is a clear sign of a brute-force attack
+
+
+B.5 — Discover what fields actually have data (don't guess field names)
+
+Initially, a broad structural summary query was executed to discover all populated fields:
+
+splindex=botsv3 src_ip="104.128.69.207" dest_ip="172.31.38.181" dest_port=22
+| fieldsummary
+| table field, count, distinct_count, values
+
+To isolate the most critical evidentiary fields for the report and provide a scannable verification table, the query was optimized as follows:
+index=botsv3 src_ip="104.128.69.207" dest_ip="172.31.38.181" dest_port=22 
+| fieldsummary 
+| search field IN ("source", "sourcetype", "app", "tcp_status")
+| table field, count, distinct_count, values
+
+<img width="1452" height="333" alt="image" src="https://github.com/user-attachments/assets/6b76f628-a31b-4148-9c51-9be62c2f64f3" />
+
+The goal of this process is to determine what other log types were created between these two IP addresses
+
+
+
+
+
+
 - Number of unique ports touched / time window: The number of unique ports touched is 35 unique ports by the ip address 192.168.8.103 which means that this is a recconnaissance
 
 - Cross-check against BOTSv3's documented scenario: ??????
