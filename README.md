@@ -223,8 +223,25 @@ index=botsv3 dest_ip="172.31.38.181" (sourcetype="linux_secure" OR sourcetype="l
 
 <img width="1447" height="188" alt="image" src="https://github.com/user-attachments/assets/4f30c88b-0ce5-4097-8802-547f84ec2c4c" />
 
-TO BE CONTINUED!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+To cross-reference network-layer findings by checking if the target system generated local authentication logs (linux_secure / syslog) and successfully transmitted them to the central SIEM (Splunk). This check aims to verify internal operating system visibility, identify the specific usernames targeted by the threat actor, and definitively confirm whether the brute-force attempts succeeded or failed.
 
+C.8 — Follow-on activity after any apparent success
+
+index=botsv3 (host="172.31.38.181" OR src_ip="172.31.38.181")
+| stats count by sourcetype
+
+<img width="1451" height="381" alt="image" src="https://github.com/user-attachments/assets/4f526a05-42f4-4375-9f4a-cba7dbb90092" />
+
+To sweep the SIEM for all available log sources (sourcetypes) interacting with or originating from the target IP (172.31.38.181). This broad check serves as a follow-on triage step to profile the asset's total digital footprint and discover any signs of post-exploitation activity following the network attack.
+
+
+##D. Scope
+
+D.9 — Other external sources hitting this same host/port (distributed attack check)
+
+
+
+<img width="1438" height="653" alt="image" src="https://github.com/user-attachments/assets/851d028d-bbf5-4dae-8313-f83c4a1cd9b2" />
 
 
 
