@@ -121,7 +121,6 @@ index=botsv3 "104.128.69.207" sourcetype=stream:tcp
 <img width="1447" height="201" alt="image" src="https://github.com/user-attachments/assets/a6d23a71-6aba-418e-a6c2-fdf20ceb9450"/>
 
 
-
 ##0.2 — Once confirmed as src_ip, pull everything it targeted (this is the query that produced 172.31.38.181)
 - This query confirmed all the destination route of the malicious ip address including the destination port and number of connections
 
@@ -246,22 +245,21 @@ To determine the scope of the attack by identifying all public internet IP addre
 
 D.10 — Other internal hosts targeted on port 22 from outside
 
-To identify the total blast radius of the attack by scanning the entire internal network for any other private hosts receiving inbound connections from the public internet over SSH (dest_port=22).
+I ran this to check if any other internal hosts were also getting hit on port 22 from outside, and whether it was the same attacker doing it.
 
 index=botsv3 dest_port=22 NOT (src_ip="10.0.0.0/8" OR src_ip="192.168.0.0/16" OR src_ip="172.16.0.0/12")
-| stats count by dest_ip
-| sort -count
+| stats count by src_ip, dest_ip
+| sort dest_ip
 
-<img width="1452" height="363" alt="image" src="https://github.com/user-attachments/assets/0589bf11-9ad3-49d9-9ce3-6b0553ad54af" />
+<img width="1446" height="707" alt="image" src="https://github.com/user-attachments/assets/dfba7b45-16f6-4f15-b6c1-df8d98d5cdca" />
 
 
-The query isolated 548 total external connection events piercing the perimeter, proving the attack was not limited to a single server. A broad network sweep targeted five distinct internal private destination IPs (dest_ip):
+What I found: 548 events from 215 different external IPs, spread across 5 internal hosts. But almost all those IPs only connected 1–4 times each (mostly to 172.16.0.109). That pattern is normal SSH scanning noise — random IPs constantly probe port 22 on any internet-facing server, unrelated to any one attacker.
+Checked: does 104.128.69.207 (our flagged IP) show up against the other 4 hosts? No. It only appears against 172.31.38.181, where it accounts for 210 of that host's 293 total attempts (~72%).
+Conclusion: This isn't one attacker sweeping 5 hosts. It's two separate things — background scanning noise hitting the network generally, and our specific attacker concentrated on one host only. Scoping this incident to 172.31.38.181; the other 4 hosts are a separate, lower-priority note (general SSH exposure to background scanning).
 
-* **`172.31.38.181 (Mail Server): Remaining the primary target with 293 attempts.
-* **`172.16.0.109 & 172.31.12.76: Secondary targets, each receiving exactly 86 attempts.
-* **`172.16.0.178 & 172.16.0.145: Received 44 attempts and 1 attempt, respectively.
 
-This event confirms a Broad Inbound Network Sweep and Brute-Force Campaign. The threat actor moved beyond passive reconnaissance into active exploitation, targeting administrative ports across multiple subnets to brute-force access and gain high privileges. The incident scope must be expanded to audit all five targeted internal hosts for potential authentication breakthroughs.
+
 
 ##E. Attribution
 
@@ -288,18 +286,22 @@ The global search confirmed that the malicious IP address interacts exclusively 
 
 
 
-## F. Response Decision Matrix
+## F. Response Decision Workflow
 
-**Objective:** To define clear, repeatable incident triage rules that map Splunk data analysis results directly to operational containment and mitigation actions.
+**Objective:** To determine the final incident classification and containment steps based on the connection metrics and authentication logs.
 
-| If Authentication Logs Show... | And Network Logs Show... | Then Classify As... | Recommended Action |
-| :--- | :--- | :--- | :--- |
-| **No successful sessions** | Single source IP only | Brute-force attempt, contained | Monitor and block the source IP at the perimeter firewall. |
-| **No successful sessions** | Multiple external IPs hitting same host | Distributed brute-force | Block attacking IPs; consider rate-limiting or fail2ban-style host controls. |
-| **Successful session found** | Any network footprint | **Active compromise — escalate immediately** | Isolate the host from the network; begin Incident Response lifecycle (containment/eradication). |
-| **Inconclusive** (No host visibility) | Any network footprint | Inconclusive, network-layer only | Document the visibility gap; recommend host-level authentication logging be enabled. |
+* **Scenario 1: Brute-Force Attempt (Contained)**
+  * **Criteria:** The external IP address exceeded 30 connection attempts, but authentication logs show zero successful logins.
+  * **Action:** Block the source IP address at the perimeter firewall and continue monitoring.
 
-> **Operational Note:** This decision matrix ensures that Tier 1 Security Operations Analysts can rapidly categorize inbound threats and eliminate guesswork during critical containment windows.
+* **Scenario 2: Active Compromise (Critical Escalation)**
+  * **Criteria:** The external IP address shows a successful login status event within the system authentication logs.
+  * **Action:** Immediately isolate the target host from the local network and escalate to the Incident Response team.
+
+* **Scenario 3: Visibility Gap (Inconclusive)**
+  * **Criteria:** Network traffic layer shows heavy activity on Port 22, but host-level authentication logs are completely missing.
+  * **Action:** Document the visibility gap and submit a ticket to enable host-level auditing logs.
+
 
 
 
