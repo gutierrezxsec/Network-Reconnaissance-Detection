@@ -239,10 +239,67 @@ To sweep the SIEM for all available log sources (sourcetypes) interacting with o
 
 D.9 — Other external sources hitting this same host/port (distributed attack check)
 
-
+To determine the scope of the attack by identifying all public internet IP addresses targeting the mail server (172.31.38.181) on the SSH port (dest_port=22). This step checks whether the intrusion attempt came from a single attacker or a distributed botnet.
 
 <img width="1438" height="653" alt="image" src="https://github.com/user-attachments/assets/851d028d-bbf5-4dae-8313-f83c4a1cd9b2" />
 
+
+D.10 — Other internal hosts targeted on port 22 from outside
+
+To identify the total blast radius of the attack by scanning the entire internal network for any other private hosts receiving inbound connections from the public internet over SSH (dest_port=22).
+
+index=botsv3 dest_port=22 NOT (src_ip="10.0.0.0/8" OR src_ip="192.168.0.0/16" OR src_ip="172.16.0.0/12")
+| stats count by dest_ip
+| sort -count
+
+<img width="1452" height="363" alt="image" src="https://github.com/user-attachments/assets/0589bf11-9ad3-49d9-9ce3-6b0553ad54af" />
+
+
+The query isolated 548 total external connection events piercing the perimeter, proving the attack was not limited to a single server. A broad network sweep targeted five distinct internal private destination IPs (dest_ip):
+
+* **`172.31.38.181 (Mail Server): Remaining the primary target with 293 attempts.
+* **`172.16.0.109 & 172.31.12.76: Secondary targets, each receiving exactly 86 attempts.
+* **`172.16.0.178 & 172.16.0.145: Received 44 attempts and 1 attempt, respectively.
+
+This event confirms a Broad Inbound Network Sweep and Brute-Force Campaign. The threat actor moved beyond passive reconnaissance into active exploitation, targeting administrative ports across multiple subnets to brute-force access and gain high privileges. The incident scope must be expanded to audit all five targeted internal hosts for potential authentication breakthroughs.
+
+##E. Attribution
+
+E.11 — Geolocation (SPL can do this much; ASN/WHOIS requires an external lookup outside Splunk)
+
+index=botsv3 src_ip="104.128.69.207"
+| iplocation src_ip
+| table src_ip, Country, Region, City
+
+<img width="1445" height="706" alt="image" src="https://github.com/user-attachments/assets/34ca5b56-ff6c-48a5-8cef-6fe8b5b757ed" />
+
+The `iplocation` command successfully mapped the malicious public IP address (`104.128.69.207`) to its physical geographic origin. The internal database lookup identified the inbound attacking traffic as originating directly from **Las Vegas, Nevada, United States**.
+
+
+E.12 — Does this IP appear anywhere else in the entire dataset?
+
+index=botsv3 "104.128.69.207"
+| stats count by sourcetype
+
+<img width="1451" height="248" alt="image" src="https://github.com/user-attachments/assets/368eb47a-dd20-4eac-94d4-eacd917c6942" />
+
+The global search confirmed that the malicious IP address interacts exclusively with raw network wire-data layers, generating entries in only two specific sourcetypes. The query isolated 418 events within the stream:ip sourcetype, which tracks raw Layer 3 network packets moving across the infrastructure, and 210 events within the stream:tcp sourcetype, which tracks Layer 4 transmission control protocol handshakes and port connections. Notably, no application-layer logs, web server logs, or operating system authentication events recorded any presence of this IP anywhere else in the corporate environment.
+
+
+
+
+## F. Response Decision Matrix
+
+**Objective:** To define clear, repeatable incident triage rules that map Splunk data analysis results directly to operational containment and mitigation actions.
+
+| If Authentication Logs Show... | And Network Logs Show... | Then Classify As... | Recommended Action |
+| :--- | :--- | :--- | :--- |
+| **No successful sessions** | Single source IP only | Brute-force attempt, contained | Monitor and block the source IP at the perimeter firewall. |
+| **No successful sessions** | Multiple external IPs hitting same host | Distributed brute-force | Block attacking IPs; consider rate-limiting or fail2ban-style host controls. |
+| **Successful session found** | Any network footprint | **Active compromise — escalate immediately** | Isolate the host from the network; begin Incident Response lifecycle (containment/eradication). |
+| **Inconclusive** (No host visibility) | Any network footprint | Inconclusive, network-layer only | Document the visibility gap; recommend host-level authentication logging be enabled. |
+
+> **Operational Note:** This decision matrix ensures that Tier 1 Security Operations Analysts can rapidly categorize inbound threats and eliminate guesswork during critical containment windows.
 
 
 
