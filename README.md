@@ -339,10 +339,7 @@ This host is documented in the BOTSv3 scenario as having executed `hdoor.exe`, a
 ## Skills Demonstrated
 
 - Splunk environment setup and dashboard creation
-- SPL query writing (`stats`, `bucket`, `dc()`, `eval`, `where`, `fieldsummary`, `iplocation`)
-- Correlation search / alert configuration (trigger logic, scheduling, thresholds)
-- End-to-end manual incident triage: asset context → threat characterization → impact assessment → scope analysis → attribution → response decision
-- Self-correction of analytical errors through data reconciliation (see B.4)
+- SPL basic query writing (`stats`, `bucket`, `dc()`, `eval`, `where`, `fieldsummary`, `iplocation`)
 - Mapping detections to MITRE ATT&CK techniques (T1046, T1110)
 - Working with a real-world security dataset (BOTSv3)
 
