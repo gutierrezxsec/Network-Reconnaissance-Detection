@@ -1,26 +1,21 @@
-# Network Reconnaissance Detection — Splunk Dashboard & Alert Configuration
-
----
+# Network Reconnaissance Detection — Splunk Dashboard & Incident Triage
 
 **Author:** Rafael Gabriel Gutierrez
-
 **Target Role:** Entry-Level SOC Analyst (Tier 1)
-
 **Dataset:** Boss of the SOC v3 (BOTSv3)
-
-**Tools Used:** Splunk Enterprise Free Tier
+**Tools:** Splunk Enterprise Free Tier
 
 ---
 
 ## Overview
 
-This is a self-directed practice project built to apply SIEM fundamentals against a real security dataset. It demonstrates a basic but complete Tier 1 SOC workflow: building visibility into network traffic, designing a detection rule for anomalous behavior, and mapping the finding to a recognized adversary technique using the BOTSv3 dataset in Splunk.
+A self-directed practice project applying SIEM fundamentals against a real security dataset. It demonstrates a complete Tier 1 SOC workflow: building visibility into network traffic, designing a detection rule for anomalous behavior, manually triaging a flagged incident end-to-end, and mapping findings to a recognized adversary technique (MITRE ATT&CK) — all using the BOTSv3 dataset in Splunk.
 
 ---
 
 ## Objective
 
-The objective of the dashboard is to answer four fundamental questions regarding perimeter network traffic:
+The dashboard answers four fundamental questions about perimeter network traffic:
 
 1. Who is generating the highest volume of network activity?
 2. What destination ports are being targeted most frequently?
@@ -31,304 +26,328 @@ The objective of the dashboard is to answer four fundamental questions regarding
 
 ## Dashboard
 
-**Panel 1 — Top Talkers (External Traffic)**
-Filters out internal address ranges (10.0.0.0/8, 192.168.0.0/16, 172.16.0.0/12) to focus only on external-facing traffic, then groups results by source IP and approximate country using `iplocation`. This gives a first-pass triage view — high-volume external sources and the ports they touched are usually the first thing an analyst checks.
+### Panel 1 — Top Talkers (External Traffic)
 
-```
+Filters out internal address ranges (`10.0.0.0/8`, `192.168.0.0/16`, `172.16.0.0/12`) to focus only on external-facing traffic, then groups results by source IP and approximate country using `iplocation`. This is the first-pass triage view — high-volume external sources and the ports they touched are usually the first thing an analyst checks.
+
+```spl
 index=botsv3 sourcetype="stream:tcp" NOT (src_ip=10.0.0.0/8 OR src_ip=192.168.0.0/16 OR src_ip=172.16.0.0/12)
 | iplocation src_ip
 | stats count, values(dest_port) as targeted_ports by src_ip, Country
 | sort - count
 ```
 
-<img width="693" height="417" alt="image" src="https://github.com/user-attachments/assets/aed417c2-b232-49a9-b4d6-6f36a65a4af6"/>
+<img width="693" height="417" alt="Panel 1 - Top Talkers" src="https://github.com/user-attachments/assets/aed417c2-b232-49a9-b4d6-6f36a65a4af6"/>
 
 ---
 
-**Panel 2 — Destination Port Distribution**
-Aggregates traffic by `dest_port` to surface which ports see the most activity. Helps spot traffic to unusual or non-standard ports at a glance.
+### Panel 2 — Destination Port Distribution
 
-```
+Aggregates traffic by `dest_port` to surface which ports see the most activity, making traffic to unusual or non-standard ports visible at a glance.
+
+```spl
 index=botsv3 sourcetype="stream:tcp"
 | stats count by dest_port
 | sort -count
 | head 15
 ```
 
-<img width="693" height="302" alt="image" src="https://github.com/user-attachments/assets/b84fcc34-26cc-4018-b294-e8a455dc6503"/>
+<img width="693" height="302" alt="Panel 2 - Destination Port Distribution" src="https://github.com/user-attachments/assets/b84fcc34-26cc-4018-b294-e8a455dc6503"/>
 
 ---
 
-**Panel 3 — Scan Detection (core panel)**
+### Panel 3 — Scan Detection (core panel)
 
-This is the main detection logic of the project. It buckets traffic into 5-minute windows and counts how many distinct destination ports each source IP touches within that window. A typical host only touches a handful of ports; a host touching many different ports in a short window is showing the textbook signature of network reconnaissance. Setting a threshold (here, more than 15 ports) flags that behavior automatically instead of relying on manual review of raw logs.
+The main detection logic of the project. Buckets traffic into 5-minute windows and counts how many distinct destination ports each source IP touches within that window. A typical host only touches a handful of ports; a host touching many different ports in a short window shows the textbook signature of network reconnaissance. A threshold of 15+ ports flags that behavior automatically instead of relying on manual review of raw logs.
 
-```
+```spl
 index=botsv3 sourcetype=stream:tcp
 | bucket _time span=5m
 | stats dc(dest_port) as unique_ports by src_ip, _time
 | where unique_ports > 15
 ```
 
-<img width="700" height="227" alt="image" src="https://github.com/user-attachments/assets/8c019c52-d93a-4461-a122-5ec7e8eb88d2"/>
+<img width="700" height="227" alt="Panel 3 - Scan Detection" src="https://github.com/user-attachments/assets/8c019c52-d93a-4461-a122-5ec7e8eb88d2"/>
 
 ---
 
-**Panel 4 — DNS Query Volume Over Time**
-Tracks DNS query volume over time as a supporting signal alongside the TCP panels above. DNS is commonly abused both for reconnaissance (enumerating internal hosts) and for data exfiltration (tunneling data out through queries), so keeping an eye on its volume adds visibility beyond a single protocol.
+### Panel 4 — DNS Query Volume Over Time
 
-```
+Tracks DNS query volume over time as a supporting signal alongside the TCP panels above. DNS is commonly abused both for reconnaissance (enumerating internal hosts) and for data exfiltration (tunneling data out through queries), so monitoring its volume extends visibility beyond a single protocol.
+
+```spl
 index=botsv3 sourcetype=stream:dns
 | timechart count
 ```
 
-<img width="692" height="297" alt="image" src="https://github.com/user-attachments/assets/b8128b5c-805d-4c5f-a3cf-4f3ac17d4519"/>
-```
+<img width="692" height="297" alt="Panel 4 - DNS Query Volume" src="https://github.com/user-attachments/assets/b8128b5c-805d-4c5f-a3cf-4f3ac17d4519"/>
+
 ---
-
-
 
 ## Alert Configuration
 
 The Panel 3 search was saved as a correlation search with the following configuration:
 
-- **Trigger condition:** number of results > 0
-- **Schedule:** every 5 minutes
-- **Logic:** flags any `src_ip` with `unique_ports > 15` in a rolling 5-minute bucket
+| Setting | Value |
+|---|---|
+| **Trigger condition** | Number of results > 0 |
+| **Schedule** | Every 5 minutes |
+| **Logic** | Flags any `src_ip` with `unique_ports > 15` in a rolling 5-minute bucket |
 
-**Note on real-time behavior:** BOTSv3 is a static, historical dataset rather than a live data stream, so this alert was configured and validated against the dataset rather than tested under continuous real-time conditions. The trigger logic, threshold, and schedule are configured exactly as they would be in a production environment — the only difference is the absence of live incoming data to trigger against repeatedly over time. This is a property of the dataset, not a limitation of the alert design.
+**Note on real-time behavior:** BOTSv3 is a static, historical dataset rather than a live data stream, so this alert was configured and validated against the dataset rather than tested under continuous real-time conditions. The trigger logic, threshold, and schedule are configured exactly as they would be in production — the only difference is the absence of live incoming data to trigger against repeatedly over time. This is a property of the dataset, not a limitation of the alert design.
 
-**MITRE ATT&CK Mapping:** T1046 — Network Service Discovery
-
+**MITRE ATT&CK Mapping:** `T1046` — Network Service Discovery
 
 ---
-<!--
-## FINDINGS
 
-- Source IP(s) flagged: `[fill in]` 
-For top talkers this source ip address 104.128.69.207 has unusual amount of connections via port 22 which crucial because it acts as the primary administrative gateway to your infrastructure
+## Findings
 
-##Q1 Triage Runbook
+### Finding 1 — SSH Brute-Force: 104.128.69.207 → 172.31.38.181
 
+| | |
+|---|---|
+| **Source IP** | `104.128.69.207` (Las Vegas, NV, US) |
+| **Destination** | `172.31.38.181:22` (internal, AWS-hosted) |
+| **Unique ports touched** | 1 (port 22 only) |
+| **Total connection attempts** | 210 |
+| **Pattern** | Single-port brute-force (not a scan) |
+| **MITRE ATT&CK** | `T1110` — Brute Force |
 
-##0. Origin — How dest_ip and direction were discovered? 
-0.1 — Find where the flagged IP shows up, and in which field (role)
-i tried to look where does the src_ip is connecting and it is confirmed that its inside internal's ip addresses public ip
+From Panel 1's top-talkers view, `104.128.69.207` stood out for its connection volume on port 22 — the administrative SSH gateway into internal infrastructure. The full triage trail below documents how this was investigated and validated.
 
+<details>
+<summary><strong>Full Triage Runbook (click to expand)</strong></summary>
+
+#### 0. Origin — How the destination and direction were identified
+
+**0.1 — Locate the flagged IP and determine its role**
+```spl
 index=botsv3 "104.128.69.207" sourcetype=stream:tcp
 | stats count by src_ip, dest_ip
+```
+<img width="1447" height="201" alt="0.1 result" src="https://github.com/user-attachments/assets/a6d23a71-6aba-418e-a6c2-fdf20ceb9450"/>
 
-<img width="1447" height="201" alt="image" src="https://github.com/user-attachments/assets/a6d23a71-6aba-418e-a6c2-fdf20ceb9450"/>
+Confirmed `104.128.69.207` consistently appears as `src_ip` — it is the initiator of the connection, not the target.
 
-
-##0.2 — Once confirmed as src_ip, pull everything it targeted (this is the query that produced 172.31.38.181)
-- This query confirmed all the destination route of the malicious ip address including the destination port and number of connections
-
+**0.2 — Identify everything this IP targeted**
+```spl
 index=botsv3 src_ip="104.128.69.207"
 | stats count by dest_ip, dest_port
+```
+<img width="1448" height="215" alt="0.2 result" src="https://github.com/user-attachments/assets/fce18a0b-fa8f-4fd7-b5a0-690ab49d7c0c"/>
 
-<img width="1448" height="215" alt="image" src="https://github.com/user-attachments/assets/fce18a0b-fa8f-4fd7-b5a0-690ab49d7c0c" />
+This is the query that surfaced `172.31.38.181:22` as the target.
 
-0.3 — Confirm the discovered dest_ip is actually internal
-172.31.38.181 falls inside 172.16.0.0/12 (RFC 1918 private range), and specifically matches AWS's default VPC CIDR block (172.31.0.0/16) — confirming it's an internal, likely cloud-hosted asset, and confirming direction as external → internal. 
+**0.3 — Confirm the destination is internal**
+`172.31.38.181` falls inside `172.16.0.0/12` (RFC 1918 private range) and specifically matches AWS's default VPC CIDR block (`172.31.0.0/16`) — confirming it's an internal, likely cloud-hosted asset, and confirming traffic direction as **external → internal**.
 
+---
 
-##A. Asset Context
+#### A. Asset Context
 
-A.1 — Is SSH service banner/version visible? (checks if Stream app parsed SSH protocol)
-
-splindex=botsv3 dest_ip="172.31.38.181" dest_port=22 sourcetype=stream:ssh
+**A.1 — Is the SSH service banner/version visible?**
+```spl
+index=botsv3 dest_ip="172.31.38.181" dest_port=22 sourcetype=stream:ssh
 | table _time, src_ip, dest_ip, ssh_version, software_version
+```
+<img width="1452" height="242" alt="A.1 result" src="https://github.com/user-attachments/assets/9d1bee50-496c-483d-9721-0c872520e949"/>
 
-<img width="1452" height="242" alt="image" src="https://github.com/user-attachments/assets/9d1bee50-496c-483d-9721-0c872520e949" />
+Empty result — confirms a visibility gap. The Stream app did not parse SSH protocol-level details, so service/software version cannot be verified from this query.
 
-The SSH banner query came back completely empty, which means we have a visibility gap and can't see the exact software version; however, our basic network logs are still absolute proof that the outsider tried to force their way into this internal server 210 times
-
-
-A.2 — What else does this host show up as? (identify role/hostname)
-
-splindex=botsv3 "172.31.38.181"
+**A.2 — What else does this host show up as?**
+```spl
+index=botsv3 "172.31.38.181"
 | stats count by sourcetype
+```
+<img width="1452" height="416" alt="A.2 result" src="https://github.com/user-attachments/assets/985f4026-7915-4c99-9020-c58f9915dc4e"/>
 
-<img width="1452" height="416" alt="image" src="https://github.com/user-attachments/assets/985f4026-7915-4c99-9020-c58f9915dc4e" />
+This host also generates `stream:smtp` (email) and `stream:dns` traffic. A traffic-direction check was not performed to confirm inbound vs. outbound, but this profile is consistent with mail server infrastructure — a plausible high-value target.
 
-A review of the server’s log types revealed that it heavily generates email traffic (stream:smtp) and network name lookups (stream:dns), proving that this internal IP is a legitimate corporate mail server and a high-value target for the attacker.
-
-
-A.3 — Did 104.128.69.207 touch any other internal hosts?
+**A.3 — Did this attacker touch any other internal hosts?**
+```spl
 index=botsv3 src_ip="104.128.69.207"
 | stats count by dest_ip, dest_port
+```
+<img width="1453" height="226" alt="A.3 result" src="https://github.com/user-attachments/assets/bfa2237d-de4c-4643-8fda-6515f144cb08"/>
 
-<img width="1453" height="226" alt="image" src="https://github.com/user-attachments/assets/bfa2237d-de4c-4643-8fda-6515f144cb08" />
+This actor's activity in the dataset is limited to a single destination host and port, with no evidence of broader scanning behavior from this specific IP.
 
-These findings support the conclusion that this was likely a targeted attack.
+---
 
-##B. Threat Characterization
+#### B. Threat Characterization
 
+**B.4 — Single port (brute-force) vs. many ports (scan)?**
+```spl
+index=botsv3 src_ip="104.128.69.207" dest_ip="172.31.38.181" sourcetype=stream:tcp
+| stats dc(dest_port) as unique_ports, count as total_connections by dest_ip
+```
+<img width="1453" height="223" alt="B.4 result" src="https://github.com/user-attachments/assets/d2f11714-7a4a-43a1-8e13-ec7d3a0123f7"/>
 
-B.4 — Single port (brute-force) vs. many ports (scan)?
+Result: `unique_ports=1`, `total_connections=210` — all attempts hit port 22 only. Confirms a single-port brute-force, not a scan.
 
-splindex=botsv3 src_ip="104.128.69.207"
-| stats dc(dest_port) as unique_ports, count as total_connections by dest_ip, dest_port
+> **Data reconciliation note:** An earlier version of this query (without a `sourcetype` filter) returned an inflated total of 628. Investigation traced this to a data-layer mismatch — `stream:ip` (Layer 3, 418 events) has no `dest_port` field and was being silently included or excluded depending on query structure, while `stream:tcp` (Layer 4, 210 events) is the layer that actually carries port data. Both sourcetypes represent the *same* underlying 210 connection attempts, captured at two different layers of the stack. Restricting to `sourcetype=stream:tcp` resolves the discrepancy and confirms 210 as the accurate, reconciled count used throughout this report.
 
-<img width="1453" height="266" alt="image" src="https://github.com/user-attachments/assets/1612a82a-0abe-4dec-9a7f-cf3a4b6034ab" />
-
-The findings show that the attacker consistently attempted to connect to port 22, which is a clear sign of a brute-force attack
-
-
-B.5 — Discover what fields actually have data (don't guess field names)
-
-Initially, a broad structural summary query was executed to discover all populated fields:
-
-splindex=botsv3 src_ip="104.128.69.207" dest_ip="172.31.38.181" dest_port=22
+**B.5 — Field discovery (avoid guessing field names)**
+```spl
+index=botsv3 src_ip="104.128.69.207" dest_ip="172.31.38.181" dest_port=22
 | fieldsummary
 | table field, count, distinct_count, values
-
-To isolate the most critical evidentiary fields for the report and provide a scannable verification table, the query was optimized as follows:
-index=botsv3 src_ip="104.128.69.207" dest_ip="172.31.38.181" dest_port=22 
-| fieldsummary 
+```
+Narrowed to the most relevant fields for the report:
+```spl
+index=botsv3 src_ip="104.128.69.207" dest_ip="172.31.38.181" dest_port=22
+| fieldsummary
 | search field IN ("source", "sourcetype", "app", "tcp_status")
 | table field, count, distinct_count, values
+```
+<img width="1452" height="333" alt="B.5 result" src="https://github.com/user-attachments/assets/6b76f628-a31b-4148-9c51-9be62c2f64f3"/>
 
-<img width="1452" height="333" alt="image" src="https://github.com/user-attachments/assets/6b76f628-a31b-4148-9c51-9be62c2f64f3" />
+---
 
-The goal of this process is to determine what other log types were created between these two IP addresses
+#### C. Success / Impact
 
-##C. Success / Impact
-C.6 — Any sign of successful connections (using fields confirmed in B.5)
-
-splindex=botsv3 src_ip="104.128.69.207" dest_ip="172.31.38.181" dest_port=22
+**C.6 — Any sign of successful connections?**
+```spl
+index=botsv3 src_ip="104.128.69.207" dest_ip="172.31.38.181" dest_port=22
 | table _time, src_port, dest_port, duration, bytes_in, bytes_out
 | head 20
+```
+<img width="1437" height="547" alt="C.6 result" src="https://github.com/user-attachments/assets/a92c3243-36c4-43da-8967-ba06fb259918"/>
 
-<img width="1437" height="547" alt="image" src="https://github.com/user-attachments/assets/a92c3243-36c4-43da-8967-ba06fb259918" />
+Two patterns in this data point toward automated, scripted activity rather than manual login attempts:
 
-* **`bytes_in` (The Attacker's Voice):** Every time the attacker tries a password, they are shouting a small piece of data into your network.
-* **`bytes_out` (Your Server's Voice):** Every time your server says "Wrong password, access denied," it sends a small piece of data back.
+- **No measurable duration:** `duration` is blank across nearly every row, consistent with a script disconnecting immediately after each attempt rather than a human pausing to type credentials.
+- **Uniform byte sizes:** `bytes_in` (~2100) and `bytes_out` (~2769) are nearly identical across all 210 attempts — consistent with a fixed-size automated request and a fixed-size automated rejection response, repeated at scale.
 
-While the attack failed to get in, the data shows the textbook fingerprint of a malicious hacking script, not a human making a mistake.
+210 repeated attempts against a single internal host is not consistent with normal user error. Network-layer evidence here suggests automated, likely-unsuccessful attempts; however, **this cannot be definitively confirmed without host-level logs** (see C.7).
 
-No Human Typing Speed (Blank Duration): A real person takes at least a few seconds to type a username and password. The duration column is completely blank because a computer script was slamming the server, sending a guess, and disconnecting in less than a millisecond.
-
-Perfect Computer Uniformity (Identical Bytes): When humans type, data sizes change because passwords have different lengths and people make typos. Here, bytes_in (~2100) and bytes_out (2769) are exactly the same on almost every line. This proves a script was repeatedly throwing a fixed-size password guess and getting the exact same automated "Access Denied" reply.
-
-The Rule of 210: A normal employee might forget their password 3 or 5 times. No one forgets their password 210 times in a row on a critical internal mail server.
-
-
-C.7 — Host-level auth logs (if this host has OS-level visibility)
+**C.7 — Host-level authentication logs**
+```spl
 index=botsv3 dest_ip="172.31.38.181" (sourcetype="linux_secure" OR sourcetype="linux_audit" OR sourcetype="syslog")
 | table _time, sourcetype, host, user, action
 | sort _time
+```
+<img width="1447" height="188" alt="C.7 result" src="https://github.com/user-attachments/assets/4f30c88b-0ce5-4097-8802-547f84ec2c4c"/>
 
-<img width="1447" height="188" alt="image" src="https://github.com/user-attachments/assets/4f30c88b-0ce5-4097-8802-547f84ec2c4c" />
+**Zero events returned.** This host has no local authentication logging reaching the SIEM — meaning success or failure of the 210 SSH attempts cannot be confirmed at the OS level. This is a **visibility gap**, not evidence that the attack failed. Per the Response Decision Workflow below, this pushes the finding toward **Scenario 3 (Visibility Gap / Inconclusive)** rather than a clean Scenario 1.
 
-To cross-reference network-layer findings by checking if the target system generated local authentication logs (linux_secure / syslog) and successfully transmitted them to the central SIEM (Splunk). This check aims to verify internal operating system visibility, identify the specific usernames targeted by the threat actor, and definitively confirm whether the brute-force attempts succeeded or failed.
-
-C.8 — Follow-on activity after any apparent success
-
+**C.8 — Follow-on / post-exploitation activity check**
+```spl
 index=botsv3 (host="172.31.38.181" OR src_ip="172.31.38.181")
 | stats count by sourcetype
+```
+<img width="1451" height="381" alt="C.8 result" src="https://github.com/user-attachments/assets/4f526a05-42f4-4375-9f4a-cba7dbb90092"/>
 
-<img width="1451" height="381" alt="image" src="https://github.com/user-attachments/assets/4f526a05-42f4-4375-9f4a-cba7dbb90092" />
+| sourcetype | count |
+|---|---|
+| stream:arp | 336 |
+| stream:dhcp | 22 |
+| stream:dns | 27,672 |
+| stream:http | 1 |
+| stream:ip | 25,863 |
+| stream:tcp | 969 |
+| stream:udp | 24,078 |
 
-To sweep the SIEM for all available log sources (sourcetypes) interacting with or originating from the target IP (172.31.38.181). This broad check serves as a follow-on triage step to profile the asset's total digital footprint and discover any signs of post-exploitation activity following the network attack.
+Volumes are consistent with normal host network activity — no unusual spike or unexpected new sourcetype that would suggest post-exploitation behavior. Combined with C.7, this supports (but does not conclusively prove, given the host-log visibility gap) that no follow-on compromise occurred.
 
+---
 
-##D. Scope
+#### D. Scope
 
-D.9 — Other external sources hitting this same host/port (distributed attack check)
+**D.9 — Distributed attack check**
+```spl
+index=botsv3 dest_ip="172.31.38.181" dest_port=22 NOT (src_ip="10.0.0.0/8" OR src_ip="192.168.0.0/16" OR src_ip="172.16.0.0/12")
+| stats count by src_ip
+| sort -count
+```
+<img width="1438" height="653" alt="D.9 result" src="https://github.com/user-attachments/assets/851d028d-bbf5-4dae-8313-f83c4a1cd9b2"/>
 
-To determine the scope of the attack by identifying all public internet IP addresses targeting the mail server (172.31.38.181) on the SSH port (dest_port=22). This step checks whether the intrusion attempt came from a single attacker or a distributed botnet.
+`104.128.69.207` accounts for 210 connections — overwhelmingly the dominant source. All other external IPs hitting this host on port 22 show only 1–4 connections each. Confirms a **single dominant attacker**, not a distributed/botnet pattern.
 
-<img width="1438" height="653" alt="image" src="https://github.com/user-attachments/assets/851d028d-bbf5-4dae-8313-f83c4a1cd9b2" />
-
-
-D.10 — Other internal hosts targeted on port 22 from outside
-
-I ran this to check if any other internal hosts were also getting hit on port 22 from outside, and whether it was the same attacker doing it.
-
+**D.10 — Are other internal hosts targeted on port 22 from outside?**
+```spl
 index=botsv3 dest_port=22 NOT (src_ip="10.0.0.0/8" OR src_ip="192.168.0.0/16" OR src_ip="172.16.0.0/12")
 | stats count by src_ip, dest_ip
 | sort dest_ip
+```
+<img width="1446" height="707" alt="D.10 result" src="https://github.com/user-attachments/assets/dfba7b45-16f6-4f15-b6c1-df8d98d5cdca"/>
 
-<img width="1446" height="707" alt="image" src="https://github.com/user-attachments/assets/dfba7b45-16f6-4f15-b6c1-df8d98d5cdca" />
+This returned 548 events from 215 distinct external IPs across 5 internal hosts. Critically, almost all of those IPs connected only 1–4 times each (mostly to `172.16.0.109`) — consistent with routine internet-wide SSH scanning noise, not a coordinated campaign.
 
+Cross-checking against A.3 confirms `104.128.69.207` does **not** appear against the other 4 hosts — its activity is concentrated entirely on `172.31.38.181`, where it accounts for 210 of that host's 293 total port-22 attempts (~72%).
 
-What I found: 548 events from 215 different external IPs, spread across 5 internal hosts. But almost all those IPs only connected 1–4 times each (mostly to 172.16.0.109). That pattern is normal SSH scanning noise — random IPs constantly probe port 22 on any internet-facing server, unrelated to any one attacker.
-Checked: does 104.128.69.207 (our flagged IP) show up against the other 4 hosts? No. It only appears against 172.31.38.181, where it accounts for 210 of that host's 293 total attempts (~72%).
-Conclusion: This isn't one attacker sweeping 5 hosts. It's two separate things — background scanning noise hitting the network generally, and our specific attacker concentrated on one host only. Scoping this incident to 172.31.38.181; the other 4 hosts are a separate, lower-priority note (general SSH exposure to background scanning).
+**Conclusion:** This is not one attacker sweeping 5 hosts. It's two separate phenomena layered together — background SSH-scanning noise hitting the network generally, and one specific actor concentrated on a single host. This incident is scoped to `172.31.38.181`; the other 4 hosts are a separate, lower-priority hygiene note (general SSH exposure to background internet scanning).
 
+---
 
+#### E. Attribution
 
-
-##E. Attribution
-
-E.11 — Geolocation (SPL can do this much; ASN/WHOIS requires an external lookup outside Splunk)
-
+**E.11 — Geolocation**
+```spl
 index=botsv3 src_ip="104.128.69.207"
 | iplocation src_ip
 | table src_ip, Country, Region, City
+```
+<img width="1445" height="706" alt="E.11 result" src="https://github.com/user-attachments/assets/34ca5b56-ff6c-48a5-8cef-6fe8b5b757ed"/>
 
-<img width="1445" height="706" alt="image" src="https://github.com/user-attachments/assets/34ca5b56-ff6c-48a5-8cef-6fe8b5b757ed" />
+Resolves to **Las Vegas, Nevada, United States**. (ASN/WHOIS ownership would require an external lookup outside Splunk.)
 
-The `iplocation` command successfully mapped the malicious public IP address (`104.128.69.207`) to its physical geographic origin. The internal database lookup identified the inbound attacking traffic as originating directly from **Las Vegas, Nevada, United States**.
-
-
-E.12 — Does this IP appear anywhere else in the entire dataset?
-
+**E.12 — Does this IP appear anywhere else in the dataset?**
+```spl
 index=botsv3 "104.128.69.207"
 | stats count by sourcetype
+```
+<img width="1451" height="248" alt="E.12 result" src="https://github.com/user-attachments/assets/368eb47a-dd20-4eac-94d4-eacd917c6942"/>
 
-<img width="1451" height="248" alt="image" src="https://github.com/user-attachments/assets/368eb47a-dd20-4eac-94d4-eacd917c6942" />
+This IP interacts exclusively with raw network wire-data layers: 418 events in `stream:ip` (Layer 3) and 210 events in `stream:tcp` (Layer 4) — the same underlying activity addressed in B.4. No application-layer, web server, or OS authentication events recorded this IP anywhere else in the environment.
 
-The global search confirmed that the malicious IP address interacts exclusively with raw network wire-data layers, generating entries in only two specific sourcetypes. The query isolated 418 events within the stream:ip sourcetype, which tracks raw Layer 3 network packets moving across the infrastructure, and 210 events within the stream:tcp sourcetype, which tracks Layer 4 transmission control protocol handshakes and port connections. Notably, no application-layer logs, web server logs, or operating system authentication events recorded any presence of this IP anywhere else in the corporate environment.
+---
 
+#### F. Response Decision Workflow
 
+| Scenario | Criteria | Action |
+|---|---|---|
+| **1 — Brute-Force (Contained)** | IP exceeds threshold connections; auth logs show zero successes | Block source IP at perimeter firewall; continue monitoring |
+| **2 — Active Compromise (Critical)** | Auth logs show a successful login event | Isolate host immediately; escalate to IR team |
+| **3 — Visibility Gap (Inconclusive)** | Heavy network-layer activity; host-level auth logs missing entirely | Document the gap; submit ticket to enable host-level auditing |
 
+**Classification: Scenario 3 — Visibility Gap.** No successful authentication was observed, but this could not be confirmed at the host level (C.7). The network-layer evidence (volume, automation pattern, single-port targeting) is consistent with a failed brute-force, but cannot be called "contained" with full confidence without host logs.
 
-## F. Response Decision Workflow
+</details>
 
-**Objective:** To determine the final incident classification and containment steps based on the connection metrics and authentication logs.
+#### Analyst Next Step
 
-* **Scenario 1: Brute-Force Attempt (Contained)**
-  * **Criteria:** The external IP address exceeded 30 connection attempts, but authentication logs show zero successful logins.
-  * **Action:** Block the source IP address at the perimeter firewall and continue monitoring.
+Block `104.128.69.207` at the perimeter firewall and continue monitoring — network-layer evidence shows no successful breach pattern. In parallel, escalate the host-level logging gap on `172.31.38.181`: submit a request to enable OS-level authentication logging (`linux_secure`/`syslog`) so future incidents on this host can be conclusively classified rather than left inconclusive. This finding does not currently warrant IR escalation, but the visibility gap itself should be tracked as a follow-up action.
 
-* **Scenario 2: Active Compromise (Critical Escalation)**
-  * **Criteria:** The external IP address shows a successful login status event within the system authentication logs.
-  * **Action:** Immediately isolate the target host from the local network and escalate to the Incident Response team.
+---
 
-* **Scenario 3: Visibility Gap (Inconclusive)**
-  * **Criteria:** Network traffic layer shows heavy activity on Port 22, but host-level authentication logs are completely missing.
-  * **Action:** Document the visibility gap and submit a ticket to enable host-level auditing logs.
+### Finding 2 — Internal Port Scan: 192.168.8.103 (host "hoth")
 
+| | |
+|---|---|
+| **Source IP** | `192.168.8.103` (internal — host "hoth") |
+| **Unique ports touched** | 35 |
+| **Pattern** | Consistent with automated network reconnaissance |
+| **MITRE ATT&CK** | `T1046` — Network Service Discovery |
 
+This host is documented in the BOTSv3 scenario as having executed `hdoor.exe`, a known backdoor/RAT with built-in scanning capability — internal reconnaissance across 35 distinct ports is consistent with post-compromise lateral-movement staging from an already-compromised asset, rather than an external probing attempt.
 
+**Analyst Next Step:** Unlike Finding 1, this is not an open question — `hoth` is independently confirmed as compromised. Isolate `192.168.8.103` from the network immediately and escalate to the Incident Response team for full containment and eradication (Scenario 2 in the Response Decision Workflow above). The port-scanning activity should be treated as evidence of active post-compromise behavior, not a standalone ambiguous signal.
 
-
-
-
-
-- Number of unique ports touched / time window: The number of unique ports touched is 35 unique ports by the ip address 192.168.8.103 which means that this is a recconnaissance
-
-- Cross-check against BOTSv3's documented scenario: ??????
-- Analyst next step: `[what would you do — escalate, gather more context, check against threat intel, close as benign?]`
-
-*(This is the part of the writeup that shows investigative thinking, not just SPL syntax — worth taking the time to fill in properly rather than leaving generic.)*
--->
 ---
 
 ## Skills Demonstrated
 
 - Splunk environment setup and dashboard creation
-- SPL query writing (`stats`, `bucket`, `dc()`, `eval`, `where`)
+- SPL query writing (`stats`, `bucket`, `dc()`, `eval`, `where`, `fieldsummary`, `iplocation`)
 - Correlation search / alert configuration (trigger logic, scheduling, thresholds)
-- Mapping detections to MITRE ATT&CK techniques
+- End-to-end manual incident triage: asset context → threat characterization → impact assessment → scope analysis → attribution → response decision
+- Self-correction of analytical errors through data reconciliation (see B.4)
+- Mapping detections to MITRE ATT&CK techniques (T1046, T1110)
 - Working with a real-world security dataset (BOTSv3)
 
 ---
-<!--
-## Summary (for resume / one-line use)
 
-> Built a Splunk dashboard visualizing network traffic patterns from the BOTSv3 dataset, including top talkers, port distribution, and time-series scan detection. Configured a correlation search/alert to flag source IPs contacting 15+ distinct destination ports within a 5-minute window, mapped to MITRE ATT&CK T1046 (Network Service Discovery).
--->
+## Summary
+
+> Built a Splunk dashboard visualizing network traffic patterns from the BOTSv3 dataset, including top talkers, port distribution, and time-series scan detection. Configured a correlation search/alert to flag source IPs contacting 15+ distinct destination ports within a 5-minute window, mapped to MITRE ATT&CK T1046 (Network Service Discovery). Independently triaged a flagged SSH brute-force incident end-to-end — tracing connection direction, characterizing attack pattern, assessing impact, scoping the incident against background network noise, and documenting a response decision — mapped to MITRE ATT&CK T1110 (Brute Force).
