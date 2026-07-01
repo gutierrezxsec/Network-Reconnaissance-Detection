@@ -117,7 +117,7 @@ The Panel 3 search was saved as a correlation search with the following configur
 | | |
 |---|---|
 | **Source IP** | `104.128.69.207` (Las Vegas, NV, US) |
-| **Destination** | `172.31.38.181:22` (internal, AWS-hosted) |
+| **Destination** | `172.31.38.181:22` (internal) |
 | **Unique ports touched** | 1 (port 22 only) |
 | **Total connection attempts** | 210 |
 | **Pattern** | Single-port brute-force (not a scan) |
