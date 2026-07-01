@@ -323,26 +323,13 @@ This IP interacts exclusively with raw network wire-data layers: 418 events in `
 
 </details>
 
-#### Analyst Next Step
+#### Next Step
 
 Block `104.128.69.207` at the perimeter firewall and continue monitoring — network-layer evidence shows no successful breach pattern. In parallel, escalate the host-level logging gap on `172.31.38.181`: submit a request to enable OS-level authentication logging (`linux_secure`/`syslog`) so future incidents on this host can be conclusively classified rather than left inconclusive. This finding does not currently warrant IR escalation, but the visibility gap itself should be tracked as a follow-up action.
 
 ---
 
-### Finding 2 — Internal Port Scan: 192.168.8.103 (host "hoth")
 
-| | |
-|---|---|
-| **Source IP** | `192.168.8.103` (internal — host "hoth") |
-| **Unique ports touched** | 35 |
-| **Pattern** | Consistent with automated network reconnaissance |
-| **MITRE ATT&CK** | `T1046` — Network Service Discovery |
-
-This host is documented in the BOTSv3 scenario as having executed `hdoor.exe`, a known backdoor/RAT with built-in scanning capability — internal reconnaissance across 35 distinct ports is consistent with post-compromise lateral-movement staging from an already-compromised asset, rather than an external probing attempt.
-
-**Analyst Next Step:** Unlike Finding 1, this is not an open question — `hoth` is independently confirmed as compromised. Isolate `192.168.8.103` from the network immediately and escalate to the Incident Response team for full containment and eradication (Scenario 2 in the Response Decision Workflow above). The port-scanning activity should be treated as evidence of active post-compromise behavior, not a standalone ambiguous signal.
-
----
 
 ## Skills Demonstrated
 
