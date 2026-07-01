@@ -26,6 +26,12 @@ The dashboard answers four fundamental questions about perimeter network traffic
 
 ## Dashboard
 
+<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/64421267-eb97-4f33-8a9c-95a4d17d0c74" />
+
+
+---
+
+
 ### Panel 1 — Top Talkers (External Traffic)
 
 Filters out internal address ranges (`10.0.0.0/8`, `192.168.0.0/16`, `172.16.0.0/12`) to focus only on external-facing traffic, then groups results by source IP and approximate country using `iplocation`. This is the first-pass triage view — high-volume external sources and the ports they touched are usually the first thing an analyst checks.
@@ -37,7 +43,8 @@ index=botsv3 sourcetype="stream:tcp" NOT (src_ip=10.0.0.0/8 OR src_ip=192.168.0.
 | sort - count
 ```
 
-<img width="693" height="417" alt="Panel 1 - Top Talkers" src="https://github.com/user-attachments/assets/aed417c2-b232-49a9-b4d6-6f36a65a4af6"/>
+<img width="827" height="418" alt="image" src="https://github.com/user-attachments/assets/6a70f3fd-6138-4418-8bf4-d09e7e9c2de8" />
+
 
 ---
 
@@ -52,7 +59,8 @@ index=botsv3 sourcetype="stream:tcp"
 | head 15
 ```
 
-<img width="693" height="302" alt="Panel 2 - Destination Port Distribution" src="https://github.com/user-attachments/assets/b84fcc34-26cc-4018-b294-e8a455dc6503"/>
+<img width="1072" height="380" alt="image" src="https://github.com/user-attachments/assets/b155ac07-0913-4881-bf5b-5123ae838379" />
+
 
 ---
 
@@ -67,7 +75,8 @@ index=botsv3 sourcetype=stream:tcp
 | where unique_ports > 15
 ```
 
-<img width="700" height="227" alt="Panel 3 - Scan Detection" src="https://github.com/user-attachments/assets/8c019c52-d93a-4461-a122-5ec7e8eb88d2"/>
+<img width="356" height="431" alt="image" src="https://github.com/user-attachments/assets/6e611558-1d1c-47da-9550-b82efbfd234b" />
+
 
 ---
 
@@ -80,7 +89,8 @@ index=botsv3 sourcetype=stream:dns
 | timechart count
 ```
 
-<img width="692" height="297" alt="Panel 4 - DNS Query Volume" src="https://github.com/user-attachments/assets/b8128b5c-805d-4c5f-a3cf-4f3ac17d4519"/>
+<img width="591" height="418" alt="image" src="https://github.com/user-attachments/assets/21aea3a3-bb73-42f3-a17b-2644200b9db9" />
+
 
 ---
 
