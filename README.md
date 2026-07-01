@@ -1,7 +1,5 @@
 # Network Reconnaissance Detection — Splunk Dashboard & Incident Triage
 
-**Author:** Rafael Gabriel Gutierrez
-**Target Role:** Entry-Level SOC Analyst (Tier 1)
 **Dataset:** Boss of the SOC v3 (BOTSv3)
 **Tools:** Splunk Enterprise Free Tier
 
